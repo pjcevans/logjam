@@ -23,12 +23,12 @@ class Unit(object):
     self.identifier = unit[0] # Just <id> string
     self.name = unit[1] # Just character name
     self.pull = pull #log restricted to unit's events
-    self.damage_targets = list(find_enemies(pull))
+    self.damage_targets = list(find_enemies(pull, unit))
     self.direct_healing = find_specific_events(pull, unit, "direct healing")#direct healing over the whole fight
     self.direct_damage = find_specific_events(pull, unit, "direct damage")
 
   def test_player(self):
-    print "Player " + self.name + " object initiated OK"
+    print "Unit " + self.name + " object initiated OK"
     return
 
 class Player(Unit):
@@ -255,11 +255,16 @@ for index, pull in enumerate(pulls): #possibly can remove index
 # Tests
 ###################
 for index, fight in enumerate(fights):
+  print " "
   print "Fight", index+1, "duration:", fight.duration
-  for player in fight.players:
+  print " "
+  for index, player in enumerate(fight.players):
+    print "Player", index+1, ":" 
     player.test_player()
-  for enemy in fight.enemies:
+  for index, enemy in enumerate(fight.enemies):
+    print "Enemy", index+1, ":"
     enemy.test_player()
+  print " "
 
 ##################
 # API functions
