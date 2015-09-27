@@ -6,9 +6,9 @@ class Fight(object):
     self.fight_number = index
     self.players = []
     self.enemies = []
-    self.player_units = list(find_players(pull))
-    self.enemy_units = list(find_enemies(pull)) # duplication of these class assignments, would be best to move these to one function.
-
+    self.player_units = list(find_enemies(pull, "0x0"))
+    self.enemy_units = list(find_enemies(pull, "0xF")) # duplication of these class assignments, would be best to move these to one function.
+    print self.player_units
     self.duration = find_fight_duration(pull)
     for unit in self.player_units:
       self.player_log = find_unit_events(pull, unit) #Finds limited combat logs for each player
@@ -149,17 +149,30 @@ def find_players(combat_log):
   # players = set(players)
   return players
 
-def find_enemies(combat_log):
+def find_enemies(combat_log, unit):
 #for a given log find any enemy players who cast heals or did damage (restricted to spell_damage / swing_damage)
   players = []
-  for line in combat_log:
-    if line[3][0:3] == "0xF" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0xF" and line[2] == "SWING_DAMAGE":
-      players.append([line[3],line[4]])
-    if line[3][0:3] == "0xF" and line[2] =="SPELL_HEAL":
-      players.append([line[3],line[4]])
-  players = [list(i) for i in set(tuple(i) for i in players)]
-  # players = set(players)
-  return players
+  print unit
+  if unit[0][0:3] == "0x0" or unit == "0x0":
+  #if "0x0" in unit[0]:
+    for line in combat_log:
+      if line[3][0:3] == "0xF" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0xF" and line[2] == "SWING_DAMAGE":
+        players.append([line[3],line[4]])
+      if line[3][0:3] == "0xF" and line[2] =="SPELL_HEAL":
+        players.append([line[3],line[4]])
+    players = [list(i) for i in set(tuple(i) for i in players)]
+    return players
+
+/bin/bash: a50: command not found
+  #elif "0xF" in unit[0]:
+    for line in combat_log:
+      if line[3][0:3] == "0xF" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0xF" and line[2] == "SWING_DAMAGE":
+        players.append([line[3],line[4]])
+      if line[3][0:3] == "0xF" and line[2] =="SPELL_HEAL":
+        players.append([line[3],line[4]])
+    players = [list(i) for i in set(tuple(i) for i in players)]
+    return players
+  return []
 
 #def 
 
