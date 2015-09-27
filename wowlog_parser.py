@@ -6,9 +6,8 @@ class Fight(object):
     self.fight_number = index
     self.players = []
     self.enemies = []
-    self.player_units = list(find_enemies(pull, "0x0"))
-    self.enemy_units = list(find_enemies(pull, "0xF")) # duplication of these class assignments, would be best to move these to one function.
-    print self.player_units
+    self.player_units = list(find_units(pull, "0x0"))
+    self.enemy_units = list(find_units(pull, "0xF")) # duplication of these class assignments, would be best to move these to one function.
     self.duration = find_fight_duration(pull)
     for unit in self.player_units:
       self.player_log = find_unit_events(pull, unit) #Finds limited combat logs for each player
@@ -23,7 +22,8 @@ class Unit(object):
     self.identifier = unit[0] # Just <id> string
     self.name = unit[1] # Just character name
     self.pull = pull #log restricted to unit's events
-    self.damage_targets = list(find_enemies(pull, unit))
+    self.damage_targets = list(find_units(pull, unit))
+    #print self.name, " targetted ", self.damage_targets
     self.direct_healing = find_specific_events(pull, unit, "direct healing")#direct healing over the whole fight
     self.direct_damage = find_specific_events(pull, unit, "direct damage")
 
@@ -49,16 +49,16 @@ def find_specific_events(pull, unit, event):
       for line in pull:
         if [line[3],line[4]] == unit and line[2] =="SPELL_HEAL":
           direct_healing.append(line)
-  	  continue#direct_healing.append(line)
+  	    #continue#direct_healing.append(line)
       #print direct_healing
       return direct_healing
 
     elif event == "direct damage":
       direct_damage = []
       for line in pull:
-        if [line[3],line[4]] == unit and line[2] == "SWING DAMAGE" or line[2] == "SPELL_DAMAGE":
-	  direct_damage.append(line)
-	  continue
+        if [line[3],line[4]] == unit and line[2] == "SWING_DAMAGE" or [line[3],line[4]] == unit and line[2] == "SPELL_DAMAGE":
+	        direct_damage.append(line)
+	      #continue
     return direct_damage
 
 
@@ -137,40 +137,41 @@ def find_unit_events(log, player):
 #  healers = set(healers)
 #  return healers
   
-def find_players(combat_log):
+#def find_players(combat_log):
 #for a given log find any friendly players who cast heals or did damage (restricted to spell_damage / swing_damage)
-  players = []
-  for line in combat_log:
-    if line[3][0:3] == "0x0" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0x0" and line[2] == "SWING_DAMAGE":
-      players.append([line[3],line[4]])
-    if line[3][0:3] == "0x0" and line[2] =="SPELL_HEAL":
-      players.append([line[3],line[4]])
-  players = [list(i) for i in set(tuple(i) for i in players)] # taken from stackoverflow as list of lists uniqueness problem
+#  players = []
+#  for line in combat_log:
+#    if line[3][0:3] == "0x0" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0x0" and line[2] == "SWING_DAMAGE":
+#      players.append([line[3],line[4]])
+#    if line[3][0:3] == "0x0" and line[2] =="SPELL_HEAL":
+#      players.append([line[3],line[4]])
+#  players = [list(i) for i in set(tuple(i) for i in players)] # taken from stackoverflow as list of lists uniqueness problem
   # players = set(players)
-  return players
+#  return players
 
-def find_enemies(combat_log, unit):
+def find_units(combat_log, unit):
 #for a given log find any enemy players who cast heals or did damage (restricted to spell_damage / swing_damage)
   players = []
-  print unit
-  if unit[0][0:3] == "0x0" or unit == "0x0":
+  #print unit
+  if  unit == "0x0" or unit[0][0:3] == "0xF":
   #if "0x0" in unit[0]:
     for line in combat_log:
-      if line[3][0:3] == "0xF" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0xF" and line[2] == "SWING_DAMAGE":
+      if line[3][0:3] == "0x0" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0x0" and line[2] == "SWING_DAMAGE":
         players.append([line[3],line[4]])
-      if line[3][0:3] == "0xF" and line[2] =="SPELL_HEAL":
+      if line[3][0:3] == "0x0" and line[2] =="SPELL_HEAL":
         players.append([line[3],line[4]])
     players = [list(i) for i in set(tuple(i) for i in players)]
     return players
 
-/bin/bash: a50: command not found
-  #elif "0xF" in unit[0]:
+  if unit == "0xF" or unit[0][0:3] == "0x0":
+  #elif "0xF" in unit[0]
     for line in combat_log:
       if line[3][0:3] == "0xF" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0xF" and line[2] == "SWING_DAMAGE":
         players.append([line[3],line[4]])
       if line[3][0:3] == "0xF" and line[2] =="SPELL_HEAL":
         players.append([line[3],line[4]])
     players = [list(i) for i in set(tuple(i) for i in players)]
+    #print players
     return players
   return []
 
@@ -259,6 +260,7 @@ pulls = []
 
 find_pulls(combat_log) # finds all combat phases, for this to work must be zero sum - ie all that is fought must die. (horrible bugs if not probably) must add in a timeout
 #print len(pulls) # pulls is now an array containing a rows of combat log split by fights
+
 fights = []
 for index, pull in enumerate(pulls): #possibly can remove index
   fights.append(Fight(pull, index))
@@ -287,8 +289,8 @@ for fight in fights:
   for player in fight.players:
     print player.damage_targets
     for line in player.direct_damage:
-      if line[6][0:3] != "0x0":
-        print line[12] + " damage to " + line[7]
+      if line[6][0:3] == "0xF":
+        print line[4] + " did " + line[12] + " damage to " + line[7]
         total_direct_damage += int(line[12])
 print "total direct damage = " + str(total_direct_damage)
 
@@ -299,8 +301,8 @@ for fight in fights:
   for enemy in fight.enemies:
     print enemy.damage_targets
     for line in enemy.direct_damage:
-      if line[6][0:3] != "0xF":
-        print line[12] + " damage to " + line[7]
+      if line[6][0:3] == "0x0":
+        print line[4] + " did " + line[12] + " damage to " + line[7]
         total_direct_damage += int(line[12])
 print "total direct damage = " + str(total_direct_damage)
 #now add target specific direct_damage and find damage on each target
