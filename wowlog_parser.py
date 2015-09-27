@@ -6,8 +6,11 @@ class Fight(object):
     self.fight_number = index
     self.players = []
     self.enemies = []
+    self.pet_units = list(find_units(pull, "0xF14")) #pets enumerated but not linked to a player
+    #print self.pet_units
     self.player_units = list(find_units(pull, "0x0"))
     self.enemy_units = list(find_units(pull, "0xF")) # duplication of these class assignments, would be best to move these to one function.
+    #print self.enemy_units
     self.duration = find_fight_duration(pull)
     for unit in self.player_units:
       self.player_log = find_unit_events(pull, unit) #Finds limited combat logs for each player
@@ -153,7 +156,19 @@ def find_units(combat_log, unit):
 #for a given log find any enemy players who cast heals or did damage (restricted to spell_damage / swing_damage)
   players = []
   #print unit
-  if  unit == "0x0" or unit[0][0:3] == "0xF":
+
+  if unit == "0xF14":
+  #enumerates pets
+    for line in combat_log:
+      if line[3][0:5] == "0xF14" and line[2] == "SPELL_DAMAGE" or line[3][0:5] == "0xF14" and line[2] == "SWING_DAMAGE":
+        players.append([line[3],line[4]])
+      if line[3][0:5] == "0xF14" and line[2] =="SPELL_HEAL":
+        players.append([line[3],line[4]])
+    players = [list(i) for i in set(tuple(i) for i in players)]
+    return players
+
+
+  if  unit == "0x0" or unit[0][0:5] == "0xF13":
   #if "0x0" in unit[0]:
     for line in combat_log:
       if line[3][0:3] == "0x0" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0x0" and line[2] == "SWING_DAMAGE":
@@ -163,10 +178,10 @@ def find_units(combat_log, unit):
     players = [list(i) for i in set(tuple(i) for i in players)]
     return players
 
-  if unit == "0xF" or unit[0][0:3] == "0x0":
+  if unit == "0xF" or unit[0][0:3] == "0x0" or unit[0][0:5] == "0xF14":
   #elif "0xF" in unit[0]
     for line in combat_log:
-      if line[3][0:3] == "0xF" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0xF" and line[2] == "SWING_DAMAGE":
+      if line[3][0:5] == "0xF13" and line[2] == "SPELL_DAMAGE" or line[3][0:5] == "0xF13" and line[2] == "SWING_DAMAGE":
         players.append([line[3],line[4]])
       if line[3][0:3] == "0xF" and line[2] =="SPELL_HEAL":
         players.append([line[3],line[4]])
@@ -233,21 +248,23 @@ def find_pulls(combat_log):
   combat = False
   #print combat
   for index, line in enumerate(combat_log):
-    if line[2] == "SPELL_DAMAGE" or line[2] == "SWING_DAMAGE": #add more pull-Types here
-      if [line[7],line[6]] not in mobs and line[6][0:3] == "0xF": #if damaged hostile target is not in mob list
+    if line[2] == "SPELL_DAMAGE" or line[2] == "SWING_DAMAGE" or line[2] == "RANGE_DAMAGE": #add more pull-Types here
+      if [line[7],line[6]] not in mobs and line[6][0:5] == "0xF13": #if damaged hostile target is not in mob list
 	#print [line[7],line[6]]
         if mobs == []:
           combat_log = combat_log[index:] #cuts off start of combat log at combat start (ie when mobs = 0)
           combat = True
+          #print combat
         mobs.append([line[7],line[6]]) #appends mob name + id to mob list 
 	#print mobs
         #print combat				
         continue
 
-    if line[2] == "PARTY_KILL" or line[2] == "UNIT_DIED" and [line[7],line[6]] in mobs: #if a mob in the list dies
+    if line[2] == "PARTY_KILL" and [line[7],line[6]] in mobs or line[2] == "UNIT_DIED" and [line[7],line[6]] in mobs: #if a mob in the list dies
       mobs.remove([line[7],line[6]])
       if mobs == []:
         combat = False
+        #print combat
         pull = combat_log[:index-2] #cuts current pull to end on the line last mob died
         pulls.append(pull)
         combat_log = combat_log[index-2:]
