@@ -28,8 +28,8 @@ class Unit(object):
     self.damage_targets = list(find_units(pull, unit))
     #print self.name, " targetted ", self.damage_targets
     self.direct_healing = find_specific_events(pull, unit, "direct healing")#direct healing over the whole fight
-    self.direct_damage = find_specific_events(pull, unit, "direct damage")
-
+    self.direct_spell_damage = find_specific_events(pull, unit, "direct spell damage")
+    self.direct_swing_damage = find_specific_events(pull, unit, "direct swing damage")
   def test_player(self):
     print "Unit " + self.name + " object initiated OK"
     return
@@ -56,13 +56,22 @@ def find_specific_events(pull, unit, event):
       #print direct_healing
       return direct_healing
 
-    elif event == "direct damage":
-      direct_damage = []
+    elif event == "direct spell damage":
+      direct_spell_damage = []
       for line in pull:
-        if [line[3],line[4]] == unit and line[2] == "SWING_DAMAGE" or [line[3],line[4]] == unit and line[2] == "SPELL_DAMAGE":
-	        direct_damage.append(line)
+        if [line[3],line[4]] == unit and line[2] == "SPELL_DAMAGE":
+	        direct_spell_damage.append(line)
 	      #continue
-    return direct_damage
+      return direct_spell_damage
+
+    elif event == "direct swing damage":
+      direct_swing_damage = []
+      for line in pull:
+        if [line[3],line[4]] == unit and line[2] == "SWING_DAMAGE":
+	        direct_swing_damage.append(line)
+	      #continue
+      return direct_swing_damage
+
 
 
 
@@ -244,22 +253,52 @@ def find_fight_duration(combat_log):
 def find_pulls(combat_log):
 # runs through combat log splitting unique combat periods into a list
   mobs = []
+  mobs_timestamp = []
   pull = []
   combat = False
   #print combat
   for index, line in enumerate(combat_log):
+
+# test timestamp of mobs & kill if late
+# test timestamp against current time
+# remove mob from mobs
+# run if mobs = [] block
+
+
+    """
+    if mobs != []:
+      #need code here. remove line based on timestamp
+      for mob in mobs:
+        for timestamp in mobs_timestamp:
+          if mob == timestamp[0:2]:
+        mobs.remove([line[7],line[6]])
+      if mobs == []:
+        combat = False
+        #print combat
+        pull = combat_log[:index-2] #cuts current pull to end on the line last mob died
+        pulls.append(pull)
+        combat_log = combat_log[index-2:]
+        find_pulls(combat_log) #recursively calls this function for the remainder of the combat_log (each pull removed from the start each iteration)
+        break
+    """
     if line[2] == "SPELL_DAMAGE" or line[2] == "SWING_DAMAGE" or line[2] == "RANGE_DAMAGE": #add more pull-Types here
-      if [line[7],line[6]] not in mobs and line[6][0:5] == "0xF13": #if damaged hostile target is not in mob list
+      if [line[7],line[6]] in mobs and line[6][0:5] == "0xF13":
+        for i in mobs_timestamp:
+          if i[0:2] == [line[7], line[6]]:
+            i[2] = line[1]
+            #update timestamp of appropriate record
+      elif [line[7],line[6]] not in mobs and line[6][0:5] == "0xF13": #if damaged hostile target is not in mob list
 	#print [line[7],line[6]]
         if mobs == []:
           combat_log = combat_log[index:] #cuts off start of combat log at combat start (ie when mobs = 0)
           combat = True
           #print combat
         mobs.append([line[7],line[6]]) #appends mob name + id to mob list 
+        mobs_timestamp.append([line[7],line[6],line[1]])
 	#print mobs
         #print combat				
         continue
-
+#add a timeout of 15 secs for each mob, to ensure each combat phase Definitely will end.
     if line[2] == "PARTY_KILL" and [line[7],line[6]] in mobs or line[2] == "UNIT_DIED" and [line[7],line[6]] in mobs: #if a mob in the list dies
       mobs.remove([line[7],line[6]])
       if mobs == []:
@@ -278,6 +317,7 @@ pulls = []
 find_pulls(combat_log) # finds all combat phases, for this to work must be zero sum - ie all that is fought must die. (horrible bugs if not probably) must add in a timeout
 #print len(pulls) # pulls is now an array containing a rows of combat log split by fights
 
+#pulls is set by find_pulls()
 fights = []
 for index, pull in enumerate(pulls): #possibly can remove index
   fights.append(Fight(pull, index))
@@ -305,10 +345,14 @@ total_direct_damage = 0
 for fight in fights:
   for player in fight.players:
     print player.damage_targets
-    for line in player.direct_damage:
-      if line[6][0:3] == "0xF":
+    for line in player.direct_spell_damage:
+      if line[6][0:5] == "0xF13":
         print line[4] + " did " + line[12] + " damage to " + line[7]
         total_direct_damage += int(line[12])
+    for line in player.direct_swing_damage:
+      if line[6][0:5] == "0xF13":
+        print line[4] + " did " + line[9] + " damage to " + line[7]
+        total_direct_damage += int(line[9])
 print "total direct damage = " + str(total_direct_damage)
 
 print " "
@@ -317,10 +361,14 @@ total_direct_damage = 0
 for fight in fights:
   for enemy in fight.enemies:
     print enemy.damage_targets
-    for line in enemy.direct_damage:
+    for line in enemy.direct_spell_damage:
       if line[6][0:3] == "0x0":
         print line[4] + " did " + line[12] + " damage to " + line[7]
         total_direct_damage += int(line[12])
+    for line in enemy.direct_swing_damage:
+      if line[6][0:3] == "0x0":
+        print line[4] + " did " + line[9] + " damage to " + line[7]
+        total_direct_damage += int(line[9])
 print "total direct damage = " + str(total_direct_damage)
 #now add target specific direct_damage and find damage on each target
 #can we find DPS?
