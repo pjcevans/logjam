@@ -1,5 +1,10 @@
 from dateutil.relativedelta import *
 from datetime import datetime
+from datetime import timedelta
+
+TIMEOUT = 15 # sets how long after a mob is attacked until it is considered out of combat
+
+
 class Fight(object):
   def __init__ (self, pull, index):
     self.pull = pull
@@ -79,37 +84,37 @@ def find_specific_events(pull, unit, event):
 
 
 
-class HealingTarget(object):
-  def __init__(self, pull, unit):
-    self.unit = unit
-    self.identifier = unit[0]
-    self.name = unit[1]
-    self.pull = pull #log restricted to unit's events
-    return
-
-class DamageTarget(object):
-  def __init__(self, pull, unit):
-    self.unit = unit
-    self.identifier = unit[0]
-    self.name = unit[1]
-    self.pull = pull #log restricted to unit's events
-    return
-
-class BuffTarget(object):
-  def __init__(self, pull, unit):
-    self.unit = unit
-    self.identifier = unit[0]
-    self.name = unit[1]
-    self.pull = pull #log restricted to unit's events
-    return
-
-class DebuffTarget(object):
-  def __init__(self, pull, unit):
-    self.unit = unit
-    self.identifier = unit[0]
-    self.name = unit[1]
-    self.pull = pull #log restricted to unit's events
-    return
+#class HealingTarget(object):
+#  def __init__(self, pull, unit):
+#    self.unit = unit
+#    self.identifier = unit[0]
+#    self.name = unit[1]
+#    self.pull = pull #log restricted to unit's events
+#    return
+#
+#class DamageTarget(object):
+#  def __init__(self, pull, unit):
+#    self.unit = unit
+#    self.identifier = unit[0]
+#    self.name = unit[1]
+#    self.pull = pull #log restricted to unit's events
+#    return
+#
+#class BuffTarget(object):
+#  def __init__(self, pull, unit):
+#    self.unit = unit
+#    self.identifier = unit[0]
+#    self.name = unit[1]
+#    self.pull = pull #log restricted to unit's events
+#    return
+#
+#class DebuffTarget(object):
+#  def __init__(self, pull, unit):
+#    self.unit = unit
+#    self.identifier = unit[0]
+#    self.name = unit[1]
+#    self.pull = pull #log restricted to unit's events
+#    return
 
 def read_log():
   f = open('log.txt', 'r')
@@ -263,15 +268,19 @@ def find_pulls(combat_log):
 # test timestamp against current time
 # remove mob from mobs
 # run if mobs = [] block
-
-
-    """
     if mobs != []:
       #need code here. remove line based on timestamp
-      for mob in mobs:
-        for timestamp in mobs_timestamp:
-          if mob == timestamp[0:2]:
-        mobs.remove([line[7],line[6]])
+
+      timeout = datetime.strptime(line[1], '%H:%M:%S.%f') # turns current lines time into a time object
+      timeout = timeout - timedelta(0,TIMEOUT) # sets timeout based on static 
+      for mobstamp in mobs_timestamp:
+        
+        if datetime.strptime(mobstamp[2], '%H:%M:%S.%f') < timeout: #using timeout has fixed evades brill but poss evaded targets now dont show in log? (ie their damage events do not)
+          mobs_timestamp.remove(mobstamp)
+          for mob in mobs: 
+            if mob == mobstamp[0:2]:
+              mobs.remove(mob) 
+
       if mobs == []:
         combat = False
         #print combat
@@ -280,12 +289,12 @@ def find_pulls(combat_log):
         combat_log = combat_log[index-2:]
         find_pulls(combat_log) #recursively calls this function for the remainder of the combat_log (each pull removed from the start each iteration)
         break
-    """
+
     if line[2] == "SPELL_DAMAGE" or line[2] == "SWING_DAMAGE" or line[2] == "RANGE_DAMAGE": #add more pull-Types here
       if [line[7],line[6]] in mobs and line[6][0:5] == "0xF13":
-        for i in mobs_timestamp:
-          if i[0:2] == [line[7], line[6]]:
-            i[2] = line[1]
+        for mob in mobs_timestamp: # updates mob timestamp every damage received event (should up this to damage dealt)
+          if mob[0:2] == [line[7], line[6]]:
+            mob[2] = line[1]
             #update timestamp of appropriate record
       elif [line[7],line[6]] not in mobs and line[6][0:5] == "0xF13": #if damaged hostile target is not in mob list
 	#print [line[7],line[6]]
@@ -301,6 +310,9 @@ def find_pulls(combat_log):
 #add a timeout of 15 secs for each mob, to ensure each combat phase Definitely will end.
     if line[2] == "PARTY_KILL" and [line[7],line[6]] in mobs or line[2] == "UNIT_DIED" and [line[7],line[6]] in mobs: #if a mob in the list dies
       mobs.remove([line[7],line[6]])
+      for mob in mobs_timestamp: #removes mob from mobs.timestamp (has to be for as only == first 2)
+        if mob[0:2] == [line[7], line[6]]:
+          mobs_timestamp.remove(mob)
       if mobs == []:
         combat = False
         #print combat
@@ -343,6 +355,7 @@ for index, fight in enumerate(fights):
 ##################
 total_direct_damage = 0
 for fight in fights:
+  print "Fight: ", fight.fight_number+1
   for player in fight.players:
     print player.damage_targets
     for line in player.direct_spell_damage:
@@ -359,6 +372,7 @@ print " "
 
 total_direct_damage = 0
 for fight in fights:
+  print "Fight: ", fight.fight_number+1
   for enemy in fight.enemies:
     print enemy.damage_targets
     for line in enemy.direct_spell_damage:
@@ -377,8 +391,7 @@ print "total direct damage = " + str(total_direct_damage)
 ###############
 # Improvements to make:
 ###############
-# - Fights are determined by engaged units dying. Does not cope with despawns, evades, partial logs.
 # - Unit events are limited to swings, spell damage, and spell healing.
-# - Find_pulls is currently a recursive function, neat but bound to cause problems at some point
-#
+# - Find_pulls is currently a recursive function, neat but bound to cause problems at some point (actually proving resilient)
+# - using timeout has fixed evades brill but poss evaded targets now dont show in log? (ie their damage events do not)
 #
