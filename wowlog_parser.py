@@ -8,6 +8,7 @@ TIMEOUT = 15 # sets how long after a mob is attacked until it is considered out 
 class Fight(object):
   def __init__ (self, pull, index):
     self.pull = pull
+    self.pet_logs = []
     self.fight_number = index
     self.players = []
     self.enemies = []
@@ -19,13 +20,37 @@ class Fight(object):
     self.duration = find_fight_duration(pull)
     for unit in self.player_units:
       self.player_log = find_unit_events(pull, unit) #Finds limited combat logs for each player
-      self.players.append(Player(self.player_log, unit)) #Creates Player object for each friendly player
+      self.unit_pets = find_hunter_pets(self.player_log, unit)
+      self.unit_pets = self.unit_pets[0]
+      
+      if self.unit_pets: # add logs if pet found
+        self.pet_logs = find_unit_events(pull, self.unit_pets)
+      self.players.append(Player(self.player_log, unit, self.pet_logs)) #Creates Player object for each friendly player
     for unit in self.enemy_units:
+      self.pet_logs = []
       self.enemy_log = find_unit_events(pull, unit)      #Finds limited combat logs for each enemy unit
-      self.enemies.append(Enemy(self.enemy_log, unit))   #Creates an Enemy object for each enemy unit
+      #print self.enemy_log
+      self.unit_pets = find_hunter_pets(self.enemy_log, unit)
+      if self.unit_pets: # add logs if pet found
+        for pet in self.unit_pets:
+          self.pet_logs = find_unit_events(pull, self.unit_pets)
+      self.enemies.append(Enemy(self.enemy_log, unit, self.pet_logs))   #Creates an Enemy object for each enemy unit
+
+def find_hunter_pets(player_log, unit):
+  for line in player_log:
+    if len(line) > 10: # handles short combat log lines
+      #print line[10]
+      #print '"Health Link"'
+      #print [line[3],line[4]]
+      #print unit 
+      #print line[6][0:5]
+      #print "0xF14"
+      if line[10] == '"Health Link"' and [line[3],line[4]] == unit and line[6][0:5] == "0xF14":
+        #print [[line[6], line[7]], unit] 
+        return [[line[6], line[7]], unit]
 
 class Unit(object):
-  def __init__(self, pull, unit):
+  def __init__(self, pull, unit, pet_logs):
     self.unit = unit # full <id> <name> array
     self.identifier = unit[0] # Just <id> string
     self.name = unit[1] # Just character name
@@ -35,18 +60,32 @@ class Unit(object):
     self.direct_healing = find_specific_events(pull, unit, "direct healing")#direct healing over the whole fight
     self.direct_spell_damage = find_specific_events(pull, unit, "direct spell damage")
     self.direct_swing_damage = find_specific_events(pull, unit, "direct swing damage")
+    #self.pet_units = list(find_units(pull, "0xF14")) #pets enumerated but not linked to a player
+    self.pet_intermediary = find_hunter_pets(pet_logs, self.unit)
+    if self.pet_intermediary != None:
+      self.pet = self.pet_intermediary
+      self.pet_damage_targets = list(find_units(pet_logs, self.pet[0]))
+      self.pet_direct_healing = find_specific_events(pet_logs, self.pet[0], "direct healing")#direct healing over the whole fight
+      self.pet_direct_spell_damage = find_specific_events(pet_logs, self.pet[0], "direct spell damage")
+      self.pet_direct_swing_damage = find_specific_events(pet_logs, self.pet[0], "direct swing damage")
+      #print self.pet_direct_swing_damage
+
+      #print self.pet[0]
+    #print self.unit
+    #print pet_logs
+    #print self.pet
   def test_player(self):
     print "Unit " + self.name + " object initiated OK"
     return
 
 class Player(Unit):
-  def __init__(self, pull, unit):
-    Unit.__init__(self, pull, unit)
+  def __init__(self, pull, unit, pet_logs):
+    Unit.__init__(self, pull, unit, pet_logs)
     
 
 class Enemy(Unit):
-  def __init__(self, pull, unit):
-    Unit.__init__(self, pull, unit)
+  def __init__(self, pull, unit, pet_logs):
+    Unit.__init__(self, pull, unit, pet_logs)
     
 
 
@@ -72,6 +111,8 @@ def find_specific_events(pull, unit, event):
     elif event == "direct swing damage":
       direct_swing_damage = []
       for line in pull:
+        #print "3 - 4: ", [line[3],line[4]]
+        #print "unit: ",  unit
         if [line[3],line[4]] == unit and line[2] == "SWING_DAMAGE":
 	        direct_swing_damage.append(line)
 	      #continue
@@ -269,7 +310,6 @@ def find_pulls(combat_log):
 # remove mob from mobs
 # run if mobs = [] block
     if mobs != []:
-      #need code here. remove line based on timestamp
 
       timeout = datetime.strptime(line[1], '%H:%M:%S.%f') # turns current lines time into a time object
       timeout = timeout - timedelta(0,TIMEOUT) # sets timeout based on static 
@@ -326,13 +366,12 @@ combat_log_lines = read_log()
 combat_log = split_log(combat_log_lines)
 pulls = []
 
-find_pulls(combat_log) # finds all combat phases, for this to work must be zero sum - ie all that is fought must die. (horrible bugs if not probably) must add in a timeout
-#print len(pulls) # pulls is now an array containing a rows of combat log split by fights
-
+find_pulls(combat_log) 
+#print len(pulls) # pulls is now an array containing rows of combat log split by fights
 #pulls is set by find_pulls()
 fights = []
 for index, pull in enumerate(pulls): #possibly can remove index
-  fights.append(Fight(pull, index))
+  fights.append(Fight(pull, index))  #loads fight objects for each fight
 
 
 ###################
@@ -362,10 +401,22 @@ for fight in fights:
       if line[6][0:5] == "0xF13":
         print line[4] + " did " + line[12] + " damage to " + line[7]
         total_direct_damage += int(line[12])
+
+    for line in player.pet_direct_spell_damage:
+      if line[6][0:5] == "0xF13":
+        print line[4] + " did " + line[12] + " damage to " + line[7]
+        total_direct_damage += int(line[12])
+
     for line in player.direct_swing_damage:
       if line[6][0:5] == "0xF13":
         print line[4] + " did " + line[9] + " damage to " + line[7]
         total_direct_damage += int(line[9])
+
+    for line in player.pet_direct_swing_damage:
+      if line[6][0:5] == "0xF13":
+        print line[4] + " did " + line[9] + " damage to " + line[7]
+        total_direct_damage += int(line[9])
+
 print "total direct damage = " + str(total_direct_damage)
 
 print " "
