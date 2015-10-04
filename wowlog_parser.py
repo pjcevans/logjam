@@ -56,7 +56,9 @@ class Unit(object):
     self.name = unit[1] # Just character name
     self.pull = pull #log restricted to unit's events
     self.damage_targets = list(find_units(pull, unit))
-    #print self.name, " targetted ", self.damage_targets
+    print self.name, " targetted ", self.damage_targets
+    print self.name
+    print self.pull
     self.direct_healing = find_specific_events(pull, unit, "direct healing")#direct healing over the whole fight
     self.direct_spell_damage = find_specific_events(pull, unit, "direct spell damage")
     self.direct_swing_damage = find_specific_events(pull, unit, "direct swing damage")
@@ -222,9 +224,7 @@ def find_units(combat_log, unit):
     players = [list(i) for i in set(tuple(i) for i in players)]
     return players
 
-
-  if  unit == "0x0" or unit[0][0:5] == "0xF13":
-  #if "0x0" in unit[0]:
+  if unit == "0x0": # finds *players*
     for line in combat_log:
       if line[3][0:3] == "0x0" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0x0" and line[2] == "SWING_DAMAGE":
         players.append([line[3],line[4]])
@@ -232,6 +232,17 @@ def find_units(combat_log, unit):
         players.append([line[3],line[4]])
     players = [list(i) for i in set(tuple(i) for i in players)]
     return players
+
+  if unit[0][0:5] == "0xF13": # when enemy finds players + pets
+    for line in combat_log:
+      if line[3][0:3] == "0x0" and line[2] == "SPELL_DAMAGE" or line[3][0:3] == "0x0" and line[2] == "SWING_DAMAGE" or line[3][0:5] == "0xF14" and line[2] == "SPELL_DAMAGE" or line[3][0:5] == "0xF14" and line[2] == "SWING_DAMAGE":
+        players.append([line[3],line[4]])
+      if line[3][0:3] == "0x0" and line[2] =="SPELL_HEAL":
+        players.append([line[3],line[4]])
+    players = [list(i) for i in set(tuple(i) for i in players)]
+    return players
+
+
 
   if unit == "0xF" or unit[0][0:3] == "0x0" or unit[0][0:5] == "0xF14":
   #elif "0xF" in unit[0]
@@ -425,13 +436,13 @@ total_direct_damage = 0
 for fight in fights:
   print "Fight: ", fight.fight_number+1
   for enemy in fight.enemies:
-    print enemy.damage_targets
+    print enemy.name, "targetted", enemy.damage_targets
     for line in enemy.direct_spell_damage:
-      if line[6][0:3] == "0x0":
+      if line[6][0:3] == "0x0" or line[6][0:5] == "0xF14":
         print line[4] + " did " + line[12] + " damage to " + line[7]
         total_direct_damage += int(line[12])
     for line in enemy.direct_swing_damage:
-      if line[6][0:3] == "0x0":
+      if line[6][0:3] == "0x0" or line[6][0:5] == "0xF14":
         print line[4] + " did " + line[9] + " damage to " + line[7]
         total_direct_damage += int(line[9])
 print "total direct damage = " + str(total_direct_damage)
