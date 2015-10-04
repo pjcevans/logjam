@@ -21,7 +21,9 @@ class Fight(object):
     for unit in self.player_units:
       self.player_log = find_unit_events(pull, unit) #Finds limited combat logs for each player
       self.unit_pets = find_hunter_pets(self.player_log, unit)
-      self.unit_pets = self.unit_pets[0]
+
+      if self.unit_pets != None:
+        self.unit_pets = self.unit_pets[0]
       
       if self.unit_pets: # add logs if pet found
         self.pet_logs = find_unit_events(pull, self.unit_pets)
@@ -56,12 +58,13 @@ class Unit(object):
     self.name = unit[1] # Just character name
     self.pull = pull #log restricted to unit's events
     self.damage_targets = list(find_units(pull, unit))
-    print self.name, " targetted ", self.damage_targets
-    print self.name
-    print self.pull
+    #print self.name, " targetted ", self.damage_targets
+    #print self.name
+    #print self.pull
     self.direct_healing = find_specific_events(pull, unit, "direct healing")#direct healing over the whole fight
     self.direct_spell_damage = find_specific_events(pull, unit, "direct spell damage")
     self.direct_swing_damage = find_specific_events(pull, unit, "direct swing damage")
+    self.spell_damage_over_time = find_specific_events(pull, unit, "spell damage over time")
     #self.pet_units = list(find_units(pull, "0xF14")) #pets enumerated but not linked to a player
     self.pet_intermediary = find_hunter_pets(pet_logs, self.unit)
     if self.pet_intermediary != None:
@@ -98,8 +101,6 @@ def find_specific_events(pull, unit, event):
       for line in pull:
         if [line[3],line[4]] == unit and line[2] =="SPELL_HEAL":
           direct_healing.append(line)
-  	    #continue#direct_healing.append(line)
-      #print direct_healing
       return direct_healing
 
     elif event == "direct spell damage":
@@ -107,17 +108,20 @@ def find_specific_events(pull, unit, event):
       for line in pull:
         if [line[3],line[4]] == unit and line[2] == "SPELL_DAMAGE":
 	        direct_spell_damage.append(line)
-	      #continue
       return direct_spell_damage
 
     elif event == "direct swing damage":
       direct_swing_damage = []
       for line in pull:
-        #print "3 - 4: ", [line[3],line[4]]
-        #print "unit: ",  unit
         if [line[3],line[4]] == unit and line[2] == "SWING_DAMAGE":
 	        direct_swing_damage.append(line)
-	      #continue
+      return direct_swing_damage
+
+    elif event == "spell damage over time":
+      direct_swing_damage = []
+      for line in pull:
+        if [line[3],line[4]] == unit and line[2] == "SPELL_PERIODIC_DAMAGE":
+	        direct_swing_damage.append(line)
       return direct_swing_damage
 
 
@@ -341,7 +345,7 @@ def find_pulls(combat_log):
         find_pulls(combat_log) #recursively calls this function for the remainder of the combat_log (each pull removed from the start each iteration)
         break
 
-    if line[2] == "SPELL_DAMAGE" or line[2] == "SWING_DAMAGE" or line[2] == "RANGE_DAMAGE": #add more pull-Types here
+    if line[2] == "SPELL_DAMAGE" or line[2] == "SWING_DAMAGE" or line[2] == "RANGE_DAMAGE" or line[2] == "SPELL_PERIODIC_DAMAGE": #add more pull-Types here
       if [line[7],line[6]] in mobs and line[6][0:5] == "0xF13":
         for mob in mobs_timestamp: # updates mob timestamp every damage received event (should up this to damage dealt)
           if mob[0:2] == [line[7], line[6]]:
@@ -413,20 +417,34 @@ for fight in fights:
         print line[4] + " did " + line[12] + " damage to " + line[7]
         total_direct_damage += int(line[12])
 
-    for line in player.pet_direct_spell_damage:
-      if line[6][0:5] == "0xF13":
-        print line[4] + " did " + line[12] + " damage to " + line[7]
-        total_direct_damage += int(line[12])
+    if hasattr(player, 'pet_direct_spell_damage'):
+      for line in player.pet_direct_spell_damage:
+        if line[6][0:5] == "0xF13":
+          print line[4] + " did " + line[12] + " damage to " + line[7]
+          total_direct_damage += int(line[12])
 
     for line in player.direct_swing_damage:
       if line[6][0:5] == "0xF13":
         print line[4] + " did " + line[9] + " damage to " + line[7]
         total_direct_damage += int(line[9])
+    
+    if hasattr(player, 'pet_direct_swing_damage'):
+      for line in player.pet_direct_swing_damage:
+        if line[6][0:5] == "0xF13":
+          print line[4] + " did " + line[9] + " damage to " + line[7]
+          total_direct_damage += int(line[9])
 
-    for line in player.pet_direct_swing_damage:
+    for line in player.spell_damage_over_time:
       if line[6][0:5] == "0xF13":
-        print line[4] + " did " + line[9] + " damage to " + line[7]
-        total_direct_damage += int(line[9])
+        print line[4] + " did " + line[12] + " damage to " + line[7]
+        total_direct_damage += int(line[12])
+
+    #for line in player.pet_spell_damage_over_time:
+    #  if line[6][0:5] == "0xF13":
+    #    print line[4] + " did " + line[9] + " damage to " + line[7]
+    #    total_direct_damage += int(line[9])
+
+
 
 print "total direct damage = " + str(total_direct_damage)
 
@@ -437,14 +455,21 @@ for fight in fights:
   print "Fight: ", fight.fight_number+1
   for enemy in fight.enemies:
     print enemy.name, "targetted", enemy.damage_targets
+
     for line in enemy.direct_spell_damage:
       if line[6][0:3] == "0x0" or line[6][0:5] == "0xF14":
         print line[4] + " did " + line[12] + " damage to " + line[7]
         total_direct_damage += int(line[12])
+
     for line in enemy.direct_swing_damage:
       if line[6][0:3] == "0x0" or line[6][0:5] == "0xF14":
         print line[4] + " did " + line[9] + " damage to " + line[7]
         total_direct_damage += int(line[9])
+
+    for line in enemy.spell_damage_over_time:
+      if line[6][0:3] == "0x0" or line[6][0:5] == "0xF14":
+        print line[4] + " did " + line[12] + " damage to " + line[7]
+        total_direct_damage += int(line[12])
 print "total direct damage = " + str(total_direct_damage)
 #now add target specific direct_damage and find damage on each target
 #can we find DPS?
